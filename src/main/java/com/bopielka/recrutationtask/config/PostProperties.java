@@ -16,9 +16,9 @@ public record PostProperties(ApiProperties api, ExportProperties export) {
         }
     }
 
-    public record ExportProperties(String directory, int maxCopies) {
+    public record ExportProperties(String directory) {
         public ExportProperties() {
-            this("posts", 5);
+            this("posts");
         }
     }
 }

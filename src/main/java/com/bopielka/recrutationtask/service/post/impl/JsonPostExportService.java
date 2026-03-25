@@ -14,21 +14,28 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PostExportServiceImpl implements PostExportService {
+public class JsonPostExportService implements PostExportService {
+
+    private static final DateTimeFormatter FOLDER_FORMAT =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy.HH.mm.ss.SSS");
+    private static final String POSTS_SUFFIX = "-posts";
+    private static final String JSON = ".json";
 
     private final PostClient postClient;
     private final ObjectMapper objectMapper;
     private final PostProperties postProperties;
-    private final OutputFileResolver outputFileResolver;
 
     @Override
     public void exportAll() {
-        Path outputDir = Path.of(postProperties.export().directory());
+        String folderName = LocalDateTime.now().format(FOLDER_FORMAT) + POSTS_SUFFIX;
+        Path outputDir = Path.of(postProperties.export().directory()).resolve(folderName);
 
         try {
             Files.createDirectories(outputDir);
@@ -40,14 +47,14 @@ public class PostExportServiceImpl implements PostExportService {
         log.info("Fetched {} posts from API", posts.size());
 
         if (posts.isEmpty()) {
-            log.info("Export skipped – no posts fetched from API");
+            log.warn("Export skipped – no posts fetched from API");
             return;
         }
 
         for (Post post : posts) {
-            File file = outputFileResolver.resolve(outputDir, post.id());
+            File file = outputDir.resolve(post.id() + JSON).toFile();
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(file, post);
-            log.info("Saved post {} -> {}", post.id(), file.getPath());
+            log.debug("Saved post {} -> {}", post.id(), file.getPath());
         }
 
         log.info("Exported {} posts to '{}'", posts.size(), outputDir.toAbsolutePath());
