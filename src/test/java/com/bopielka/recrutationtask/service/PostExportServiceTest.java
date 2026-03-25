@@ -17,7 +17,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.bopielka.recrutationtask.exception.post.PostExportException;
+import org.springframework.web.client.RestClientException;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.when;
 
@@ -105,6 +109,16 @@ class PostExportServiceTest {
         when(postClient.fetchAllPosts()).thenReturn(List.of());
 
         assertDoesNotThrow(() -> service.exportAll());
+    }
+
+    @Test
+    void shouldThrowPostExportExceptionWhenApiFails() {
+        when(postClient.fetchAllPosts()).thenThrow(new RestClientException("connection refused"));
+
+        assertThatThrownBy(() -> service.exportAll())
+                .isInstanceOf(PostExportException.class)
+                .hasMessageContaining("Failed to fetch posts from API")
+                .hasCauseInstanceOf(RestClientException.class);
     }
 
     private long countSubfolders(Path dir) {
