@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -32,41 +33,54 @@ public class JsonPostExportService implements PostExportService {
     private final PostClient postClient;
     private final ObjectMapper objectMapper;
     private final PostProperties postProperties;
+    private final Clock clock;
 
     @Override
     public void exportAll() {
-        String folderName = LocalDateTime.now().format(FOLDER_FORMAT) + POSTS_SUFFIX;
-        Path outputDir = Path.of(postProperties.export().directory()).resolve(folderName);
+        List<Post> posts = fetchPosts();
+        if (posts.isEmpty()) {
+            log.warn("Export skipped – no posts fetched from API");
+            return;
+        }
+        Path outputDir = createOutputDirectory();
+        savePosts(posts, outputDir);
+        log.info("Exported {} posts to '{}'", posts.size(), outputDir.toAbsolutePath());
+    }
 
+    private List<Post> fetchPosts() {
+        try {
+            List<Post> posts = postClient.fetchAllPosts();
+            log.info("Fetched {} posts from API", posts.size());
+            return posts;
+        } catch (RestClientException e) {
+            throw new PostExportException("Failed to fetch posts from API", e);
+        }
+    }
+
+    private Path createOutputDirectory() {
+        String folderName = LocalDateTime.now(clock).format(FOLDER_FORMAT) + POSTS_SUFFIX;
+        Path outputDir = Path.of(postProperties.export().directory()).resolve(folderName);
         try {
             Files.createDirectories(outputDir);
         } catch (IOException e) {
             throw new PostExportException("Failed to create output directory: " + outputDir, e);
         }
+        return outputDir;
+    }
 
-        List<Post> posts;
-        try {
-            posts = postClient.fetchAllPosts();
-        } catch (RestClientException e) {
-            throw new PostExportException("Failed to fetch posts from API", e);
-        }
-        log.info("Fetched {} posts from API", posts.size());
-
-        if (posts.isEmpty()) {
-            log.warn("Export skipped – no posts fetched from API");
-            return;
-        }
-
+    private void savePosts(List<Post> posts, Path outputDir) {
         for (Post post : posts) {
-            Path file = outputDir.resolve(post.id() + JSON);
-            try (OutputStream out = Files.newOutputStream(file)) {
-                objectMapper.writerWithDefaultPrettyPrinter().writeValue(out, post);
-            } catch (IOException e) {
-                throw new PostExportException("Failed to write post " + post.id() + " to file: " + file, e);
-            }
-            log.debug("Saved post {} -> {}", post.id(), file);
+            savePost(post, outputDir);
         }
+    }
 
-        log.info("Exported {} posts to '{}'", posts.size(), outputDir.toAbsolutePath());
+    private void savePost(Post post, Path outputDir) {
+        Path file = outputDir.resolve(post.id() + JSON);
+        try (OutputStream out = Files.newOutputStream(file)) {
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(out, post);
+        } catch (IOException e) {
+            throw new PostExportException("Failed to write post " + post.id() + " to file: " + file, e);
+        }
+        log.debug("Saved post {} -> {}", post.id(), file);
     }
 }

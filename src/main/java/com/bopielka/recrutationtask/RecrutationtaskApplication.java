@@ -1,6 +1,7 @@
 package com.bopielka.recrutationtask;
 
 import com.bopielka.recrutationtask.config.PostProperties;
+import com.bopielka.recrutationtask.exception.post.PostExportException;
 import com.bopielka.recrutationtask.service.post.api.PostExportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,12 @@ public class RecrutationtaskApplication implements CommandLineRunner {
     @Override
     public void run(String... args) {
         log.info("Starting post export");
-        postExportService.exportAll();
-        log.info("Post export finished");
+        try {
+            postExportService.exportAll();
+            log.info("Post export finished");
+        } catch (PostExportException e) {
+            log.error("Post export failed: {}", e.getMessage());
+            System.exit(1);
+        }
     }
 }

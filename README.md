@@ -14,36 +14,35 @@ and saves each post as a separate JSON file.
 ./mvnw spring-boot:run
 ```
 
-After startup the application fetches all posts, writes them to the configured output directory and exits.
-Output files are named after the post ID: `1.json`, `2.json`, …, `100.json`.
+After startup the application fetches all posts, writes them to a timestamped subdirectory inside the configured output
+directory, and exits. Output files are named after the post ID: `1.json`, `2.json`, …, `100.json`.
+
+Example output directory after two runs:
+
+```
+posts/
+├── 2026-03-25_10-00-00-000-posts/
+│   ├── 1.json
+│   └── 2.json
+└── 2026-03-25_10-05-00-000-posts/
+    ├── 1.json
+    └── 2.json
+```
 
 ## Configuration
 
 All settings are in `src/main/resources/application.properties`:
 
-| Property                    | Default                                  | Description                                              |
-|-----------------------------|------------------------------------------|----------------------------------------------------------|
-| `post.api.base-url`         | `https://jsonplaceholder.typicode.com`   | Base URL of the JSONPlaceholder API                      |
-| `post.export.directory`     | `posts`                                  | Directory where JSON files are written                   |
-| `post.export.max-copies`    | `5`                                      | Max number of suffixed copies allowed per file           |
+| Property                | Default                                | Description                                           |
+|-------------------------|----------------------------------------|-------------------------------------------------------|
+| `post.api.base-url`     | `https://jsonplaceholder.typicode.com` | Base URL of the JSONPlaceholder API                   |
+| `post.export.directory` | `posts`                                | Base directory; each run creates a timestamped subfolder inside |
 
 You can override any property at runtime without recompiling:
 
 ```bash
 ./mvnw spring-boot:run -Dspring-boot.run.arguments="--post.export.directory=/tmp/posts"
 ```
-
-## File conflict handling
-
-If a file with a given name already exists, the application logs a warning and creates a suffixed copy:
-
-```
-1.json        ← already exists
-1_1.json      ← already exists
-1_2.json      ← written here
-```
-
-If the number of existing copies reaches `post.export.max-copies`, a `PostExportException` is thrown and the export stops.
 
 ## Project structure
 
@@ -54,7 +53,7 @@ src/main/java/com/bopielka/recrutationtask/
 │   ├── PostClient.java                   interface
 │   └── JsonPostClient.java               HTTP implementation (RestClient → /posts)
 ├── config/
-│   ├── AppConfig.java                    RestClient bean
+│   ├── AppConfig.java                    RestClient and Clock beans
 │   └── PostProperties.java               typed configuration (@ConfigurationProperties)
 ├── exception/post/
 │   └── PostExportException.java          domain exception
@@ -63,8 +62,7 @@ src/main/java/com/bopielka/recrutationtask/
 └── service/post/
     ├── api/PostExportService.java         interface
     └── impl/
-        ├── JsonPostExportService.java     orchestrates fetch → create dir → save
-        └── OutputFileResolver.java        resolves output filename, handles duplicates
+        └── JsonPostExportService.java     orchestrates fetch → create dir → save
 ```
 
 ## Running tests

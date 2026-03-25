@@ -2,6 +2,7 @@ package com.bopielka.recrutationtask.service;
 
 import com.bopielka.recrutationtask.client.post.PostClient;
 import com.bopielka.recrutationtask.config.PostProperties;
+import com.bopielka.recrutationtask.exception.post.PostExportException;
 import com.bopielka.recrutationtask.model.post.Post;
 import com.bopielka.recrutationtask.service.post.impl.JsonPostExportService;
 import tools.jackson.databind.ObjectMapper;
@@ -11,18 +12,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestClientException;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
-
-import com.bopielka.recrutationtask.exception.post.PostExportException;
-import org.springframework.web.client.RestClientException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +33,9 @@ class PostExportServiceTest {
 
     @Mock
     private PostClient postClient;
+
+    @Mock
+    private Clock clock;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -40,11 +46,14 @@ class PostExportServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(clock.getZone()).thenReturn(ZoneId.of("UTC"));
+        lenient().when(clock.instant()).thenAnswer(inv -> Instant.now());
+
         PostProperties postProperties = new PostProperties(
                 new PostProperties.ApiProperties("https://jsonplaceholder.typicode.com"),
                 new PostProperties.ExportProperties(tempDir.toString())
         );
-        service = new JsonPostExportService(postClient, objectMapper, postProperties);
+        service = new JsonPostExportService(postClient, objectMapper, postProperties, clock);
     }
 
     @Test
@@ -53,16 +62,17 @@ class PostExportServiceTest {
 
         service.exportAll();
 
-        long subfolders = countSubfolders(tempDir);
-        assertThat(subfolders).isEqualTo(1);
+        assertThat(countSubfolders(tempDir)).isEqualTo(1);
     }
 
     @Test
-    void shouldCreateSeparateSubfolderForEachRun() throws InterruptedException {
+    void shouldCreateSeparateSubfolderForEachRun() {
         when(postClient.fetchAllPosts()).thenReturn(List.of(new Post(1, 1, "Title", "Body")));
+        when(clock.instant())
+                .thenReturn(Instant.parse("2026-01-01T10:00:00.000Z"))
+                .thenReturn(Instant.parse("2026-01-01T10:00:01.000Z"));
 
         service.exportAll();
-        Thread.sleep(2); // ensure different millisecond timestamp
         service.exportAll();
 
         assertThat(countSubfolders(tempDir)).isEqualTo(2);
@@ -109,6 +119,15 @@ class PostExportServiceTest {
         when(postClient.fetchAllPosts()).thenReturn(List.of());
 
         assertDoesNotThrow(() -> service.exportAll());
+    }
+
+    @Test
+    void shouldNotCreateDirectoryWhenPostListIsEmpty() {
+        when(postClient.fetchAllPosts()).thenReturn(List.of());
+
+        service.exportAll();
+
+        assertThat(countSubfolders(tempDir)).isEqualTo(0);
     }
 
     @Test
